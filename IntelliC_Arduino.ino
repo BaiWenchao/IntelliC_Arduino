@@ -1,11 +1,14 @@
 #include <Servo.h>
 
 #define PIN_SERVO 10
+#define sensorPin A0
+#define pressureThreshold 450
 
 Servo myservo;
 
 int trigPin = 8;
 int echoPin = 7;
+int beePin = 3;
 float v = 331.5 + 0.6 * 15; // m/s
 
 int pos = 0;
@@ -14,6 +17,7 @@ int delta = 10;
 int delayTime = 500;
 
 bool hasFind = false;
+bool hasBee = false;
 
 float distanceM() {
   // send sound pulse
@@ -37,53 +41,83 @@ void spinningLog(int pos, int distance) {
   Serial.println("========================");
 }
 
+bool hasCup() {
+  return analogRead(sensorPin) > pressureThreshold ? true : false;
+}
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
   pinMode(trigPin, OUTPUT);
+  pinMode(beePin, OUTPUT);
   pinMode(echoPin, INPUT);
   myservo.attach(PIN_SERVO);
+
+  digitalWrite(beePin, HIGH);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (hasFind) {
+  if (!hasCup()) {
+    Serial.println("LEAVE!");
+    myservo.write(0);
+    hasFind = false;
+    hasBee = false;
     return;
   } else {
-    for (int i=0; i<180; i+=delta) {
-      pos = i;
-      distance = distanceM();
-      myservo.write(pos);
-      spinningLog(pos, distance);
-      if (distance <= 15) {
-        Serial.println("##### DIST ACHIEVED! (A) #####");
-        hasFind = true;
-        pos += 60;
-        myservo.write(pos);
-        spinningLog(pos, distance);
-        Serial.println("##############################");
-        delay(delayTime);
+    if (hasFind) {
+      Serial.println("Counting!");
+      if (hasBee) {
         return;
       }
-      delay(delayTime);
-    }
-
-    for (int i=180; i>0; i-=delta) {
-      pos = i;
-      distance = distanceM();
-      myservo.write(pos);
-      spinningLog(pos, distance);
-      if (distance <= 15) {
-        Serial.println("##### DIST ACHIEVED! (B) #####");
-        hasFind = true;
-        pos += 60;
-        myservo.write(pos);
-        spinningLog(pos, distance);
-        Serial.println("##############################");
-        delay(delayTime);
-        return;
+      bool flag = true;
+      for (int i=0; i<10; i++) {
+        if (!hasCup()) {
+          flag = false;
+        }
+        delay(500);
       }
-      delay(delayTime);
+      if (flag) {
+        digitalWrite(beePin, LOW);
+        delay(1000);
+        digitalWrite(beePin, HIGH);
+        hasBee = true;
+        delay(1000);
+      }
+    } else {
+      Serial.println("Searching!");
+      for (int i=0; i<180; i+=delta) {
+        if (!hasCup()) return;
+        Serial.println(analogRead(sensorPin));
+        pos = i;
+        distance = distanceM();
+        myservo.write(pos);
+        if (distance <= 15) {
+          hasFind = true;
+          pos += 60;
+          myservo.write(pos);
+          delay(delayTime);
+          return;
+        }
+        delay(delayTime);
+      }
+  
+      for (int i=180; i>0; i-=delta) {
+        if (!hasCup()) return;
+        Serial.println(analogRead(sensorPin));
+        pos = i;
+        distance = distanceM();
+        myservo.write(pos);
+  
+        if (distance <= 15) {
+          hasFind = true;
+          pos += 60;
+          myservo.write(pos);
+          delay(delayTime);
+          return;
+        }
+        delay(delayTime);
+      }
     }
   }
 }
